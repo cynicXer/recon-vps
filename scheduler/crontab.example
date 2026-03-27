@@ -1,0 +1,19 @@
+# Recon automation crontab
+# Install with: crontab crontab.example
+# Or let setup.sh handle it automatically.
+#
+# Adjust the schedule as needed:
+#   0 2 * * *   = daily at 02:00 UTC
+#   0 2 * * 1   = weekly on Monday at 02:00 UTC
+#   0 2 */3 * * = every 3 days at 02:00 UTC
+
+# Source the DB password from the .env file at runtime
+0 2 * * * DB_PASSWORD=$(grep DB_PASSWORD /opt/recon/scheduler/.env | cut -d= -f2) /opt/recon/venv/bin/python /opt/recon/scheduler/recon_runner.py --all --config /opt/recon/scheduler/config.yaml >> /var/log/recon.log 2>&1
+
+# To run a single target by name:
+# DB_PASSWORD=$(grep DB_PASSWORD /opt/recon/scheduler/.env | cut -d= -f2) \
+#   /opt/recon/venv/bin/python /opt/recon/scheduler/recon_runner.py \
+#   --target "Example Corp" --config /opt/recon/scheduler/config.yaml
+
+# Rotate logs older than 30 days
+0 3 * * 0 find /var/log/ -name "recon*.log" -mtime +30 -delete

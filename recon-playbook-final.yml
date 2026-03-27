@@ -1,0 +1,112 @@
+---
+- name: Provision and Prepare Recon Droplet
+  hosts: localhost
+  connection: local
+  vars:
+    do_token: "{{ lookup('env', 'DO_API_TOKEN') }}"
+    droplet_name: "recon-box"
+    region: "nyc3"
+    size: "s-2vcpu-4gb"
+    image: "ubuntu-24-04-x64"
+
+  tasks:
+    - name: Get the 'joel' SSH key info
+      community.digitalocean.digital_ocean_sshkey_info:
+        oauth_token: "{{ do_token }}"
+      register: keys_result
+
+    - name: Set SSH key ID variable
+      set_fact:
+        joel_key_id: "{{ item.id }}"
+      with_items: "{{ keys_result.data }}"
+      when: item.name == "joel"
+
+    - name: Create the droplet
+      community.digitalocean.digital_ocean_droplet:
+        state: present
+        oauth_token: "{{ do_token }}"
+        name: "{{ droplet_name }}"
+        size: "{{ size }}"
+        region: "{{ region }}"
+        image: "{{ image }}"
+        ssh_keys: [ "{{ joel_key_id }}" ]
+        wait: yes
+      register: my_droplet
+
+    - name: Add new host to inventory with SSH bypass
+      add_host:
+        name: "{{ my_droplet.data.droplet.networks.v4[0].ip_address }}"
+        groups: temp_inventory
+        ansible_user: root
+        # This bypasses the "Host key verification failed" error
+        ansible_ssh_extra_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+    - name: Update local SSH config with new Droplet IP
+      blockinfile:
+        path: "{{ lookup('env', 'HOME') }}/.ssh/config"
+        create: yes
+        mode: '0600'
+        owner: "{{ lookup('env', 'USER') }}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - {{ droplet_name }}"
+        block: |
+          Host {{ droplet_name }}
+              HostName {{ my_droplet.data.droplet.networks.v4[0].ip_address }}
+              User root
+              IdentityFile ~/.ssh/joel
+              StrictHostKeyChecking no
+              UserKnownHostsFile /dev/null
+
+- name: Post-Provisioning Configuration
+  hosts: temp_inventory
+  gather_facts: no
+  vars:
+    # OPTIONAL: Point this to your private key if it's not the default id_rsa
+    ansible_ssh_private_key_file: "~/.ssh/joel"
+  
+  tasks:
+    - name: Wait for SSH to become available
+      wait_for_connection:
+        delay: 5
+        timeout: 300
+      
+    - name: Gather facts
+      setup:
+
+    - name: Update apt cache and upgrade packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+        cache_valid_time: 3600
+
+    - name: Install build dependencies
+      apt:
+        name:
+          - cargo
+          - libpcap-dev
+          - curl
+          - git
+        state: present
+
+    - name: Install Go 1.23.5 manually
+      shell: |
+        curl -OL https://go.dev/dl/go1.23.5.linux-amd64.tar.gz
+        rm -rf /usr/local/go && tar -C /usr/local -xzf go1.23.5.linux-amd64.tar.gz
+      args:
+        creates: /usr/local/go
+
+    - name: Set Environment Path Fact
+      set_fact:
+        go_env:
+          PATH: "/usr/local/go/bin:/root/go/bin:{{ ansible_env.PATH }}"
+          GOROOT: "/usr/local/go"
+          GOPATH: "/root/go"
+
+    - name: Install ProjectDiscovery tools
+      shell: "/usr/local/go/bin/go install -v {{ item }}@latest"
+      loop:
+        - github.com/projectdiscovery/subfinder/v2/cmd/subfinder
+        - github.com/projectdiscovery/dnsx/cmd/dnsx
+        - github.com/projectdiscovery/naabu/v2/cmd/naabu
+        - github.com/projectdiscovery/asnmap/cmd/asnmap
+        - github.com/projectdiscovery/caduceus/v2/cmd/caduceus
+      environment: "{{ go_env }}"

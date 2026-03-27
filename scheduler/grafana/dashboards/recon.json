@@ -1,0 +1,506 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
+    {"type": "datasource", "id": "postgres", "name": "PostgreSQL", "version": "1.0.0"}
+  ],
+  "annotations": {"list": []},
+  "description": "Recon Automation Dashboard - subdomain, port, DNS, and ASN tracking over time",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "title": "Summary - Latest Run",
+      "type": "row"
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 100},
+            {"color": "red", "value": 1000}
+          ]},
+          "unit": "short",
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 1},
+      "id": 1,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "Total Subdomains (Latest Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT total_subdomains AS \"Subdomains\" FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 50},
+            {"color": "red", "value": 200}
+          ]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 1},
+      "id": 2,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "Open Ports (Latest Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT total_ports AS \"Ports\" FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1},
+            {"color": "red", "value": 10}
+          ]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 1},
+      "id": 3,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "New Subdomains (vs Previous Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COUNT(*) AS \"New\" FROM run_diffs rd JOIN runs r ON r.id = rd.run_id WHERE r.target_domain = '$domain' AND rd.diff_type = 'subdomain' AND rd.change_type = 'added' AND r.id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1)",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1},
+            {"color": "red", "value": 5}
+          ]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 1},
+      "id": 4,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "Removed Subdomains (vs Previous Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COUNT(*) AS \"Removed\" FROM run_diffs rd JOIN runs r ON r.id = rd.run_id WHERE r.target_domain = '$domain' AND rd.diff_type = 'subdomain' AND rd.change_type = 'removed' AND r.id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1)",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1},
+            {"color": "red", "value": 5}
+          ]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 1},
+      "id": 5,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "New Open Ports (vs Previous Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COUNT(*) AS \"New Ports\" FROM run_diffs rd JOIN runs r ON r.id = rd.run_id WHERE r.target_domain = '$domain' AND rd.diff_type = 'port' AND rd.change_type = 'added' AND r.id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1)",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 3600},
+            {"color": "red", "value": 7200}
+          ]},
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 1},
+      "id": 6,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "value", "graphMode": "none"},
+      "title": "Last Run Duration",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (finished_at - started_at))::integer AS \"Duration\" FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 5},
+      "id": 101,
+      "title": "Trends Over Time",
+      "type": "row"
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 10, "pointSize": 6, "showPoints": "always"},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "id": 10,
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "title": "Subdomain Count Over Time",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT r.started_at AS \"time\", COUNT(s.id) AS \"Subdomains\" FROM runs r LEFT JOIN subdomains s ON s.run_id = r.id WHERE r.target_domain = '$domain' AND r.status IN ('completed','partial') AND $__timeFilter(r.started_at) GROUP BY r.id, r.started_at ORDER BY r.started_at ASC",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {"lineWidth": 2, "fillOpacity": 10, "pointSize": 6, "showPoints": "always"},
+          "unit": "short"
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Removed"}, "properties": [{"id": "custom.transform", "value": "negative-Y"}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "id": 11,
+      "options": {
+        "tooltip": {"mode": "single"},
+        "legend": {"displayMode": "list", "placement": "bottom"}
+      },
+      "title": "New vs Removed Subdomains Per Run",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT r.started_at AS \"time\", COALESCE(SUM(CASE WHEN rd.change_type='added' THEN 1 END), 0) AS \"Added\", COALESCE(SUM(CASE WHEN rd.change_type='removed' THEN 1 END), 0) AS \"Removed\" FROM runs r LEFT JOIN run_diffs rd ON rd.run_id = r.id AND rd.diff_type = 'subdomain' WHERE r.target_domain = '$domain' AND r.status IN ('completed','partial') AND $__timeFilter(r.started_at) GROUP BY r.id, r.started_at ORDER BY r.started_at ASC",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 14},
+      "id": 102,
+      "title": "Latest Run Details",
+      "type": "row"
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "blue", "value": null}
+          ]},
+          "unit": "short",
+          "custom": {"displayMode": "basic"}
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 8, "x": 0, "y": 15},
+      "id": 20,
+      "options": {"orientation": "horizontal", "reduceOptions": {"calcs": ["sum"]}, "displayMode": "gradient", "valueMode": "color"},
+      "title": "Open Ports Distribution (Latest Run)",
+      "type": "bargauge",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT p.port::text || '/' || p.protocol AS \"Port\", COUNT(DISTINCT p.ip) AS \"Unique IPs\" FROM ports p JOIN runs r ON r.id = p.run_id WHERE r.target_domain = '$domain' AND r.started_at = (SELECT MAX(started_at) FROM runs WHERE target_domain = '$domain' AND status = 'completed') GROUP BY p.port, p.protocol ORDER BY \"Unique IPs\" DESC LIMIT 20",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 8, "x": 8, "y": 15},
+      "id": 21,
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "pieType": "pie", "tooltip": {"mode": "single"}, "legend": {"displayMode": "table", "placement": "bottom", "values": ["percent","value"]}},
+      "title": "DNS Record Types (Latest Run)",
+      "type": "piechart",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT d.record_type AS \"Record Type\", COUNT(*) AS \"Count\" FROM dns_records d JOIN runs r ON r.id = d.run_id WHERE r.target_domain = '$domain' AND r.started_at = (SELECT MAX(started_at) FROM runs WHERE target_domain = '$domain' AND status = 'completed') GROUP BY d.record_type ORDER BY \"Count\" DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 8, "x": 16, "y": 15},
+      "id": 22,
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "pieType": "donut", "tooltip": {"mode": "single"}, "legend": {"displayMode": "table", "placement": "bottom", "values": ["percent","value"]}},
+      "title": "ASN Distribution (All Time)",
+      "type": "piechart",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COALESCE(a.as_name, 'Unknown') AS \"ASN\", COUNT(DISTINCT r.id) AS \"Runs\" FROM asn_records a JOIN runs r ON r.id = a.run_id WHERE r.target_domain = '$domain' GROUP BY a.as_name ORDER BY \"Runs\" DESC LIMIT 15",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 25},
+      "id": 103,
+      "title": "Change Feed",
+      "type": "row"
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left"}, "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Detected"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]},
+          {"matcher": {"id": "byName", "options": "Change"}, "properties": [
+            {"id": "custom.displayMode", "value": "color-text"},
+            {"id": "mappings", "value": [
+              {"type": "value", "options": {"added": {"color": "green", "index": 0}, "removed": {"color": "red", "index": 1}}}
+            ]}
+          ]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 12, "x": 0, "y": 26},
+      "id": 30,
+      "options": {"sortBy": [{"displayName": "Detected", "desc": true}], "footer": {"show": false}},
+      "title": "Recent Subdomain Changes",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT rd.detected_at AS \"Detected\", rd.change_type AS \"Change\", rd.value AS \"Subdomain\", rd.metadata->>'sources' AS \"Sources\" FROM run_diffs rd JOIN runs r ON r.id = rd.run_id WHERE r.target_domain = '$domain' AND rd.diff_type = 'subdomain' AND $__timeFilter(rd.detected_at) ORDER BY rd.detected_at DESC LIMIT 200",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left"}, "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Detected"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]},
+          {"matcher": {"id": "byName", "options": "Change"}, "properties": [
+            {"id": "custom.displayMode", "value": "color-text"},
+            {"id": "mappings", "value": [
+              {"type": "value", "options": {"added": {"color": "green", "index": 0}, "removed": {"color": "red", "index": 1}}}
+            ]}
+          ]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 12, "x": 12, "y": 26},
+      "id": 31,
+      "options": {"sortBy": [{"displayName": "Detected", "desc": true}], "footer": {"show": false}},
+      "title": "Recent Port Changes",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT rd.detected_at AS \"Detected\", rd.change_type AS \"Change\", rd.value AS \"IP:Port\", rd.metadata->>'service' AS \"Service\", rd.metadata->>'host' AS \"Host\" FROM run_diffs rd JOIN runs r ON r.id = rd.run_id WHERE r.target_domain = '$domain' AND rd.diff_type = 'port' AND $__timeFilter(rd.detected_at) ORDER BY rd.detected_at DESC LIMIT 200",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
+      "id": 104,
+      "title": "Run History",
+      "type": "row"
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left"}, "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Started"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]},
+          {"matcher": {"id": "byName", "options": "Finished"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]},
+          {"matcher": {"id": "byName", "options": "Duration"}, "properties": [{"id": "unit", "value": "s"}]},
+          {"matcher": {"id": "byName", "options": "Status"}, "properties": [
+            {"id": "custom.displayMode", "value": "color-background"},
+            {"id": "mappings", "value": [
+              {"type": "value", "options": {
+                "completed": {"color": "green", "index": 0},
+                "failed": {"color": "red", "index": 1},
+                "running": {"color": "yellow", "index": 2},
+                "partial": {"color": "orange", "index": 3}
+              }}
+            ]}
+          ]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 37},
+      "id": 40,
+      "options": {"sortBy": [{"displayName": "Started", "desc": true}], "footer": {"show": false}},
+      "title": "Run History",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT r.started_at AS \"Started\", r.finished_at AS \"Finished\", EXTRACT(EPOCH FROM (r.finished_at - r.started_at))::integer AS \"Duration\", r.status AS \"Status\", r.total_subdomains AS \"Subdomains\", r.total_ips AS \"IPs\", r.total_ports AS \"Ports\", COALESCE(added.cnt, 0) AS \"New Subs\", COALESCE(removed.cnt, 0) AS \"Removed Subs\", COALESCE(added_ports.cnt, 0) AS \"New Ports\" FROM runs r LEFT JOIN (SELECT run_id, COUNT(*) AS cnt FROM run_diffs WHERE change_type='added' AND diff_type='subdomain' GROUP BY run_id) added ON added.run_id = r.id LEFT JOIN (SELECT run_id, COUNT(*) AS cnt FROM run_diffs WHERE change_type='removed' AND diff_type='subdomain' GROUP BY run_id) removed ON removed.run_id = r.id LEFT JOIN (SELECT run_id, COUNT(*) AS cnt FROM run_diffs WHERE change_type='added' AND diff_type='port' GROUP BY run_id) added_ports ON added_ports.run_id = r.id WHERE r.target_domain = '$domain' AND $__timeFilter(r.started_at) ORDER BY r.started_at DESC LIMIT 50",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left"}, "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Last Seen"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 47},
+      "id": 41,
+      "options": {"sortBy": [{"displayName": "Seen in Runs", "desc": true}], "footer": {"show": false}},
+      "title": "ASN Details",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT a.as_number AS \"ASN\", a.as_name AS \"Organization\", a.as_country AS \"Country\", COUNT(DISTINCT r.id) AS \"Seen in Runs\", MAX(r.started_at) AS \"Last Seen\" FROM asn_records a JOIN runs r ON r.id = a.run_id WHERE r.target_domain = '$domain' AND $__timeFilter(r.started_at) GROUP BY a.as_number, a.as_name, a.as_country ORDER BY \"Seen in Runs\" DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    }
+
+  ],
+
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": ["recon", "security", "automation"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+        "definition": "SELECT DISTINCT target_domain FROM runs ORDER BY 1",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Domain",
+        "multi": false,
+        "name": "domain",
+        "options": [],
+        "query": "SELECT DISTINCT target_domain FROM runs ORDER BY 1",
+        "refresh": 2,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-30d", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Recon Automation",
+  "uid": "recon-automation-v1",
+  "version": 1
+}

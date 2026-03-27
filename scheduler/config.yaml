@@ -1,0 +1,78 @@
+# Recon Runner Configuration
+# Copy this file and customize before running.
+
+database:
+  host: "127.0.0.1"
+  port: 5432
+  name: "recon"
+  user: "recon"
+  # password: read from DB_PASSWORD env var at runtime if not set here
+  password: ""
+
+targets:
+  - name: "Example Corp"           # display name used in Grafana and logs
+    enabled: true
+
+    # Seed domains — subfinder enumerates subdomains for each one
+    domains:
+      - "example.com"
+      - "example.net"
+
+    # ASNs — asnmap resolves each to its CIDR blocks, then naabu scans them
+    # and dnsx does PTR (reverse DNS) lookups across the ranges
+    asns:
+      - "AS12345"
+      - "AS67890"
+
+    # Explicit IP ranges/CIDRs — fed directly to naabu + PTR lookups
+    # Use these for ranges you know belong to the target but aren't in an ASN above
+    ip_ranges:
+      - "203.0.113.0/24"
+      - "198.51.100.0/28"
+
+    tools:
+      subfinder: true
+      dnsx: true        # forward DNS for subdomains + PTR for IPs
+      naabu: true
+      asnmap: true
+      caduceus: false   # set true once you've verified caduceus output format
+
+    naabu_ports: "21,22,25,53,80,110,143,443,3306,5432,6379,8080,8443,8888,27017"
+    naabu_rate: 1000    # packets per second; lower for external/internet targets
+
+  # Add more targets here:
+  # - name: "Subsidiary Inc"
+  #   enabled: false
+  #   domains:
+  #     - "subsidiary.io"
+  #   asns: []
+  #   ip_ranges:
+  #     - "10.20.0.0/16"
+  #   tools:
+  #     subfinder: true
+  #     dnsx: true
+  #     naabu: true
+  #     asnmap: false
+  #     caduceus: false
+
+tool_paths:
+  subfinder: "/root/go/bin/subfinder"
+  dnsx: "/root/go/bin/dnsx"
+  naabu: "/root/go/bin/naabu"
+  asnmap: "/root/go/bin/asnmap"
+  caduceus: "/root/go/bin/caduceus"
+
+output_dir: "/tmp/recon_outputs"
+
+log_level: "INFO"           # DEBUG, INFO, WARNING, ERROR
+
+# Delete runs older than this many days (0 = keep forever)
+retention_days: 90
+
+# Per-tool timeouts in seconds
+timeouts:
+  subfinder: 3600
+  dnsx: 3600
+  naabu: 7200
+  asnmap: 600
+  caduceus: 1800

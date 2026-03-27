@@ -1,0 +1,20 @@
+apiVersion: 1
+
+datasources:
+  - name: ReconDB
+    type: postgres
+    uid: recon_postgres_ds
+    url: recon_postgres:5432
+    database: recon
+    user: recon
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1600
+      timescaledb: false
+    isDefault: true
+    editable: false
