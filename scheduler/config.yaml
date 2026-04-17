@@ -9,6 +9,16 @@ database:
   # password: read from DB_PASSWORD env var at runtime if not set here
   password: ""
 
+shodan:
+  # API key — can also be set via SHODAN_API_KEY env var
+  api_key: ""
+  # Query Shodan's index for each IP found by other tools (banners, versions, CVEs)
+  enrich_ips: true
+  # Also run passive Shodan searches to discover hosts not found by active scanning
+  passive_search: true
+  # Max IPs to enrich per run (Shodan API credits cost money; free tier = 1 req/s)
+  max_enrichment_ips: 500
+
 targets:
   - name: "Example Corp"           # display name used in Grafana and logs
     enabled: true
@@ -29,6 +39,13 @@ targets:
     ip_ranges:
       - "203.0.113.0/24"
       - "198.51.100.0/28"
+
+    # Shodan passive search queries for this target (optional)
+    # These run in addition to IP enrichment from other tools
+    shodan_queries:
+      - "org:\"Example Corp\""
+      - "asn:AS12345"
+      - "hostname:example.com"
 
     tools:
       subfinder: true

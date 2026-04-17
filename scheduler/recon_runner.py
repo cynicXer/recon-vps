@@ -118,6 +118,7 @@ def complete_run(conn, run_id: int, totals: dict):
 
 def fail_run(conn, run_id: int, error: str):
     try:
+        conn.rollback()
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE runs SET status='failed', finished_at=NOW(), error_message=%s WHERE id=%s",
@@ -422,10 +423,18 @@ def _ingest_asnmap_output(output: Path, input_label: str,
 
     for obj in parse_jsonl(output):
         ranges = obj.get("as_range", [])
+        as_num_raw = obj.get("as_number")
+        if isinstance(as_num_raw, str):
+            try:
+                as_num = int(as_num_raw.upper().lstrip("AS"))
+            except ValueError:
+                as_num = None
+        else:
+            as_num = as_num_raw
         rows.append((
             run_id,
             obj.get("input", input_label),
-            obj.get("as_number"),
+            as_num,
             obj.get("as_name"),
             obj.get("as_country"),
             ranges,
@@ -673,19 +682,19 @@ def _parse_shodan_service(item: dict, ip: str, org: str, isp: str,
 
 def run_shodan_enrich(cfg: dict, ips: set, run_id: int, conn):
     """
-    Query Shodan for each discovered IP to get service banners, versions, CVEs.
-    Limited to max_enrichment_ips per run to control API usage.
+    Query Shodan host() for a specific set of IPs — use this only for IPs
+    where naabu confirmed open ports, not for bulk discovery.
     """
     api = _get_shodan_api(cfg)
-    if not api:
+    if not api or not ips:
         return
 
     shodan_cfg = cfg.get("shodan", {})
-    limit = shodan_cfg.get("max_enrichment_ips", 100)
+    limit = shodan_cfg.get("max_enrichment_ips", 500)
     targets = list(ips)[:limit]
 
     if len(ips) > limit:
-        log.warning(f"Shodan enrichment: capping at {limit} of {len(ips)} IPs")
+        log.warning(f"Shodan host() enrichment: capping at {limit} of {len(ips)} IPs")
 
     rows = []
     for ip in targets:
@@ -714,8 +723,9 @@ def run_shodan_enrich(cfg: dict, ips: set, run_id: int, conn):
 
 def run_shodan_search(cfg: dict, queries: list, run_id: int, conn) -> set:
     """
-    Run passive Shodan searches for the target (by org, ASN, hostname, etc.).
-    Returns set of IPs discovered, which may supplement active scan results.
+    Run paginated Shodan searches. Each query can be anything Shodan supports:
+    org:, asn:, net:, hostname:, etc.
+    Returns set of IPs discovered.
     """
     api = _get_shodan_api(cfg)
     if not api or not queries:
@@ -727,33 +737,61 @@ def run_shodan_search(cfg: dict, queries: list, run_id: int, conn) -> set:
     for query in queries:
         log.info(f"Shodan search: {query}")
         try:
-            results = api.search(query)
-            log.info(f"Shodan '{query}': {results['total']} total results, "
-                     f"fetched {len(results['matches'])}")
+            # Get total count first
+            count = api.count(query)
+            total = count.get("total", 0)
+            total_pages = (total // 100) + (1 if total % 100 else 0)
+            log.info(f"Shodan '{query}': {total} total results across {total_pages} pages")
 
-            for match in results["matches"]:
-                ip = match.get("ip_str", "")
-                if not ip:
-                    continue
-                discovered_ips.add(ip)
+            for page in range(1, total_pages + 1):
+                try:
+                    results = api.search(query, page=page)
+                except shodan_lib.APIError as e:
+                    # Paid plans required for pagination beyond page 1
+                    if "page" in str(e).lower() or "upgrade" in str(e).lower():
+                        log.warning(f"Shodan pagination requires a paid plan — "
+                                    f"fetched page 1 only for '{query}'")
+                        break
+                    raise
 
-                rows.append(_parse_shodan_service(
-                    match,
-                    ip,
-                    match.get("org", ""),
-                    match.get("isp", ""),
-                    match.get("os"),
-                    match.get("hostnames", []),
-                    match.get("tags", []),
-                    run_id,
-                    "search",
-                ))
+                for match in results["matches"]:
+                    ip = match.get("ip_str", "")
+                    if not ip:
+                        continue
+                    discovered_ips.add(ip)
+                    rows.append(_parse_shodan_service(
+                        match,
+                        ip,
+                        match.get("org", ""),
+                        match.get("isp", ""),
+                        match.get("os"),
+                        match.get("hostnames", []),
+                        match.get("tags", []),
+                        run_id,
+                        "search",
+                    ))
+
+                # Flush to DB every 500 rows to avoid memory buildup on large targets
+                if len(rows) >= BATCH_SIZE:
+                    _ingest_shodan_rows(rows, run_id, conn)
+                    rows = []
+
         except shodan_lib.APIError as e:
             log.warning(f"Shodan search failed for '{query}': {e}")
 
-    _ingest_shodan_rows(rows, run_id, conn)
-    log.info(f"Shodan passive search found {len(discovered_ips)} unique IPs")
+    if rows:
+        _ingest_shodan_rows(rows, run_id, conn)
+
+    log.info(f"Shodan search found {len(discovered_ips)} unique IPs")
     return discovered_ips
+
+
+def build_shodan_net_queries(ip_ranges: list) -> list:
+    """
+    Convert ip_ranges config entries into Shodan net: search queries.
+    e.g. ["203.0.113.0/24"] -> ["net:203.0.113.0/24"]
+    """
+    return [f"net:{cidr}" for cidr in ip_ranges if cidr]
 
 
 # ---------------------------------------------------------------------------
@@ -1030,26 +1068,24 @@ def run_target(cfg: dict, target_cfg: dict, schema_path: Path):
         # ── Shodan ─────────────────────────────────────────────────────────
         shodan_cfg = cfg.get("shodan", {})
 
-        # Passive search: discover additional hosts via Shodan queries
-        shodan_queries = target_cfg.get("shodan_queries", [])
-        if shodan_cfg.get("passive_search", True) and shodan_queries:
-            shodan_ips = run_shodan_search(cfg, shodan_queries, run_id, conn)
-            # Add Shodan-discovered IPs to the enrichment pool
-            all_known_ips = {ip for ips in host_ip_map.values() for ip in ips}
-            port_ips = {entry.split(":")[0] for entry in port_set}
-            all_known_ips.update(port_ips)
-        else:
-            shodan_ips = set()
+        # Build search queries: explicit ones from config + auto-generated
+        # net: queries for ip_ranges + asn: queries for each ASN
+        shodan_queries = list(target_cfg.get("shodan_queries", []))
+        shodan_queries += build_shodan_net_queries(ip_ranges)
+        shodan_queries += [f"asn:{a}" for a in asns
+                           if f"asn:{a}" not in shodan_queries]
 
-        # IP enrichment: query Shodan for every IP found by active tools + search
-        if shodan_cfg.get("enrich_ips", True):
-            all_ips_to_enrich = (
-                {ip for ips in host_ip_map.values() for ip in ips}
-                | {entry.split(":")[0] for entry in port_set}
-                | shodan_ips
-            )
-            if all_ips_to_enrich:
-                run_shodan_enrich(cfg, all_ips_to_enrich, run_id, conn)
+        # Bulk search: pulls all Shodan data for ASNs/CIDRs/org without
+        # per-IP API calls — this is the efficient path for large targets
+        if shodan_cfg.get("passive_search", True) and shodan_queries:
+            run_shodan_search(cfg, shodan_queries, run_id, conn)
+
+        # Targeted host() enrichment: only for IPs where naabu confirmed
+        # open ports — much smaller set than all discovered IPs
+        if shodan_cfg.get("enrich_ips", True) and port_set:
+            live_ips = {entry.split(":")[0] for entry in port_set}
+            log.info(f"Shodan host() enrichment for {len(live_ips)} IPs with open ports")
+            run_shodan_enrich(cfg, live_ips, run_id, conn)
 
         # ── PTR lookups on IPs that naabu found open ports on ─────────────
         # This gives us hostnames for ASN/CIDR-sourced IPs without having
