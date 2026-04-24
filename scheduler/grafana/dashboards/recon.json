@@ -407,8 +407,31 @@
     },
 
     {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left"}, "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "First Seen"}, "properties": [{"id": "unit", "value": "dateTimeAsLocal"}]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 36},
+      "id": 32,
+      "options": {"sortBy": [{"displayName": "IP"}], "footer": {"show": false}},
+      "title": "New IPs (not seen in previous run)",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "WITH latest_run AS (SELECT id, started_at FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1), prev_run AS (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' AND id < (SELECT id FROM latest_run) ORDER BY started_at DESC LIMIT 1) SELECT p.ip AS \"IP\", COUNT(DISTINCT p.port) AS \"Open Ports\", string_agg(DISTINCT p.port::text || '/' || COALESCE(p.service, 'unknown'), ', ' ORDER BY p.port::text || '/' || COALESCE(p.service, 'unknown')) AS \"Ports/Services\", COALESCE(MAX(p.host), '') AS \"Hostname\", (SELECT started_at FROM latest_run) AS \"First Seen\" FROM ports p WHERE p.run_id = (SELECT id FROM latest_run) AND p.ip NOT IN (SELECT DISTINCT ip FROM ports WHERE run_id = (SELECT id FROM prev_run)) GROUP BY p.ip ORDER BY p.ip",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 46},
       "id": 104,
       "title": "Run History",
       "type": "row"
@@ -467,6 +490,181 @@
         {
           "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
           "rawSql": "SELECT a.as_number AS \"ASN\", a.as_name AS \"Organization\", a.as_country AS \"Country\", COUNT(DISTINCT r.id) AS \"Seen in Runs\", MAX(r.started_at) AS \"Last Seen\" FROM asn_records a JOIN runs r ON r.id = a.run_id WHERE r.target_domain = '$domain' AND $__timeFilter(r.started_at) GROUP BY a.as_number, a.as_name, a.as_country ORDER BY \"Seen in Runs\" DESC",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 55},
+      "id": 105,
+      "title": "Shodan Intelligence",
+      "type": "row"
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "red", "value": 1}
+          ]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 56},
+      "id": 50,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "IPs with CVEs (Latest Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COUNT(DISTINCT ip) AS \"Vulnerable IPs\" FROM shodan_findings WHERE run_id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1) AND vulns IS NOT NULL AND vulns != '{}'::jsonb",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "yellow", "value": 1}
+          ]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 56},
+      "id": 51,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "Total CVEs Found (Latest Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COUNT(*) AS \"CVEs\" FROM (SELECT jsonb_object_keys(vulns) FROM shodan_findings WHERE run_id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1) AND vulns IS NOT NULL AND vulns != '{}'::jsonb) cves",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [
+            {"color": "green", "value": null},
+            {"color": "blue", "value": 1}
+          ]},
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 56},
+      "id": 52,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto", "colorMode": "background", "graphMode": "none"},
+      "title": "Shodan-Only IPs (Latest Run)",
+      "type": "stat",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COUNT(DISTINCT ip) AS \"Shodan-Only\" FROM shodan_findings WHERE run_id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1) AND source = 'search' AND ip NOT IN (SELECT DISTINCT ip FROM ports WHERE run_id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1))",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 60},
+      "id": 53,
+      "options": {"reduceOptions": {"calcs": ["sum"]}, "pieType": "donut", "tooltip": {"mode": "single"}, "legend": {"displayMode": "table", "placement": "bottom", "values": ["percent","value"]}},
+      "title": "Top Products/Services (Shodan)",
+      "type": "piechart",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT COALESCE(product, 'unknown') AS \"Product\", COUNT(*) AS \"Count\" FROM shodan_findings sf JOIN runs r ON r.id = sf.run_id WHERE r.target_domain = '$domain' AND $__timeFilter(r.started_at) AND product IS NOT NULL GROUP BY product ORDER BY \"Count\" DESC LIMIT 15",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left"}, "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "CVSS"}, "properties": [
+            {"id": "custom.displayMode", "value": "color-background"},
+            {"id": "thresholds", "value": {"mode": "absolute", "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 4},
+              {"color": "orange", "value": 7},
+              {"color": "red", "value": 9}
+            ]}}
+          ]}
+        ]
+      },
+      "gridPos": {"h": 8, "w": 16, "x": 8, "y": 60},
+      "id": 54,
+      "options": {"sortBy": [{"displayName": "CVSS", "desc": true}], "footer": {"show": false}},
+      "title": "CVE Findings",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT sf.ip AS \"IP\", sf.port AS \"Port\", sf.product AS \"Product\", sf.version AS \"Version\", cve.key AS \"CVE\", (cve.value->>'cvss')::numeric AS \"CVSS\", LEFT(cve.value->>'summary', 120) AS \"Summary\" FROM shodan_findings sf JOIN runs r ON r.id = sf.run_id, jsonb_each(sf.vulns) AS cve WHERE r.target_domain = '$domain' AND $__timeFilter(r.started_at) AND sf.vulns IS NOT NULL AND sf.vulns != '{}'::jsonb ORDER BY \"CVSS\" DESC NULLS LAST LIMIT 100",
+          "format": "table",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "left"}, "unit": "short"},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Source"}, "properties": [
+            {"id": "custom.displayMode", "value": "color-text"},
+            {"id": "mappings", "value": [
+              {"type": "value", "options": {
+                "host_lookup": {"color": "blue", "index": 0},
+                "search": {"color": "purple", "index": 1}
+              }}
+            ]}
+          ]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 68},
+      "id": 55,
+      "options": {"sortBy": [{"displayName": "IP"}], "footer": {"show": false}},
+      "title": "Shodan Host Details (Latest Run)",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": {"type": "postgres", "uid": "recon_postgres_ds"},
+          "rawSql": "SELECT sf.ip AS \"IP\", sf.port AS \"Port\", sf.protocol AS \"Proto\", sf.product AS \"Product\", sf.version AS \"Version\", sf.os AS \"OS\", sf.org AS \"Org\", array_to_string(sf.hostnames, ', ') AS \"Hostnames\", CASE WHEN sf.vulns IS NOT NULL AND sf.vulns != '{}'::jsonb THEN jsonb_object_keys(sf.vulns) ELSE NULL END AS \"CVEs\", sf.source AS \"Source\" FROM shodan_findings sf WHERE sf.run_id = (SELECT id FROM runs WHERE target_domain = '$domain' AND status = 'completed' ORDER BY started_at DESC LIMIT 1) ORDER BY sf.ip, sf.port",
           "format": "table",
           "refId": "A"
         }
